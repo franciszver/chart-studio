@@ -12,6 +12,7 @@ import { Toolbar } from '@/components/explorer/toolbar'
 import { SqlEditor } from '@/components/explorer/sql-editor'
 import { ResultsTable } from '@/components/explorer/results-table'
 import { validateSqlQuery, ValidationError } from '@/components/explorer/sql-validation'
+import { AiQueryInput } from '@/components/explorer/ai-query-input'
 
 const GET_SCHEMA_METADATA = gql`
   query GetSchemaMetadata {
@@ -86,11 +87,9 @@ export default function ExplorerPage() {
       setCurrentRunId(null)
       toast.success(`Query completed in ${result.executionTimeMs}ms. ${result.rowCount} rows returned.`)
 
-      console.log('🔄 Query completed, starting instant fade-in...')
       // Start fade immediately
       setShowResults(true)
       requestAnimationFrame(() => {
-        console.log('🎯 Setting resultsFadeIn to true')
         setResultsFadeIn(true)
       })
     },
@@ -111,18 +110,6 @@ export default function ExplorerPage() {
   })
 
   const schema = schemaData?.getSchemaMetadata
-  
-  // Debug: Log schema data
-  console.log('📊 Schema data in Explorer:', { 
-    hasSchemaData: !!schemaData,
-    hasSchema: !!schema,
-    tablesCount: schema?.tables?.length || 0,
-    tables: schema?.tables?.map((t: any) => ({ 
-      name: t.name, 
-      columnCount: t.columns?.length || 0,
-      columns: t.columns?.map((c: any) => c.name) || []
-    })) || []
-  })
 
   // Handler functions
   const handleRunQuery = useCallback(async () => {
@@ -131,10 +118,9 @@ export default function ExplorerPage() {
       return
     }
 
-    console.log('🚀 Starting query execution...')
     // Mark that user has attempted to run a query
     setHasRunQuery(true)
-    
+
     // Validate on run; show errors in results panel
     const errors = validateSqlQuery(sqlQuery)
     setValidationErrors(errors)
@@ -142,7 +128,6 @@ export default function ExplorerPage() {
     setShowResults(false)
     setResultsFadeIn(false)
     if (errors.length > 0) {
-      console.log('❌ Validation errors found, not executing')
       return
     }
 
@@ -181,17 +166,6 @@ export default function ExplorerPage() {
     enableOnContentEditable: true,
     enableOnFormTags: true
   }, [handleRunQuery])
-
-  // Debug state changes
-  useEffect(() => {
-    console.log('📊 State changed:', {
-      showResults,
-      resultsFadeIn,
-      hasCurrentResult: !!currentResult,
-      hasValidationErrors: validationErrors.length > 0,
-      isExecuting
-    })
-  }, [showResults, resultsFadeIn, currentResult, validationErrors, isExecuting])
 
   // Fade-in effect for results when they load
   useEffect(() => {
@@ -242,9 +216,9 @@ export default function ExplorerPage() {
         }
       `}</style>
       <div className="h-full flex flex-col">
-        <div className="border-b border-gray-200 pb-4 mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">Data Explorer</h1>
-          <p className="mt-1 text-sm text-gray-600">
+        <div className="border-b border-border pb-4 mb-4">
+          <h1 className="text-2xl font-bold text-foreground">Data Explorer</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Advanced SQL query interface for data exploration
           </p>
         </div>
@@ -264,12 +238,12 @@ export default function ExplorerPage() {
               defaultSize={25}
               minSize={15}
               maxSize={40}
-              className="bg-gray-50 border-r border-gray-200"
+              className="bg-card border-r border-border"
             >
               <SchemaBrowser />
             </Panel>
 
-            <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-gray-300 transition-colors" />
+            <PanelResizeHandle className="w-1 bg-border hover:bg-muted-foreground/20 transition-colors" />
 
             {/* Main Panel - SQL Editor and Results */}
             <Panel defaultSize={75} minSize={60}>
@@ -278,39 +252,48 @@ export default function ExplorerPage() {
                 <Panel
                   defaultSize={50}
                   minSize={30}
-                  className="border-b border-gray-200"
+                  className="border-b border-border"
                 >
-                  <div className="h-full bg-white p-4">
+                  <div className="h-full bg-background p-4 flex flex-col">
+                    {/* AI Query Input */}
+                    <AiQueryInput
+                      schema={schema}
+                      onSqlGenerated={setSqlQuery}
+                      className="mb-4 pb-4 border-b border-border"
+                    />
+
                     <div className="mb-2">
-                      <h3 className="text-sm font-medium text-gray-900 mb-1">SQL Query</h3>
-                      <p className="text-xs text-gray-600">
+                      <h3 className="text-sm font-medium text-foreground mb-1">SQL Query</h3>
+                      <p className="text-xs text-muted-foreground">
                         Write SELECT queries to explore your data. Start typing for table/column suggestions, or use Ctrl+Space to trigger autocomplete.
                       </p>
                     </div>
-                    <SqlEditor
-                      value={sqlQuery}
-                      onChange={setSqlQuery}
-                      schema={schema}
-                      placeholder="-- Write your SQL query here
+                    <div className="flex-1 min-h-0">
+                      <SqlEditor
+                        value={sqlQuery}
+                        onChange={setSqlQuery}
+                        schema={schema}
+                        placeholder="-- Write your SQL query here
 SELECT * FROM customers LIMIT 10;"
-                    />
+                      />
+                    </div>
                   </div>
                 </Panel>
 
-                <PanelResizeHandle className="h-1 bg-gray-200 hover:bg-gray-300 transition-colors" />
+                <PanelResizeHandle className="h-1 bg-border hover:bg-muted-foreground/20 transition-colors" />
 
                                                   {/* Results Panel */}
                 <Panel defaultSize={50} minSize={30}>
-                  <div className="relative h-full bg-white">
+                  <div className="relative h-full bg-background">
                     {/* Spinner Overlay - Outside the results panel to remain visible */}
                     {isExecuting && (
-                      <div className="absolute inset-0 z-50 bg-white flex items-center justify-center min-h-full load-spinner">
+                      <div className="absolute inset-0 z-50 bg-background flex items-center justify-center min-h-full load-spinner">
                         <div className="text-center">
-                          <svg className="mx-auto w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24" aria-label="Loading">
+                          <svg className="mx-auto w-8 h-8 text-primary animate-spin" fill="none" viewBox="0 0 24 24" aria-label="Loading">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
-                          <div className="mt-3 text-sm text-gray-700">Running query...</div>
+                          <div className="mt-3 text-sm text-muted-foreground">Running query...</div>
                         </div>
                       </div>
                     )}
@@ -319,11 +302,11 @@ SELECT * FROM customers LIMIT 10;"
                     <div className={`h-full flex flex-col ${getResultsPanelClass()}`}>
                       {/* Validation Errors */}
                       {validationErrors.length > 0 && (
-                        <div className="px-4 py-3 bg-red-50 border-b border-red-200">
-                          <div className="text-sm font-medium text-red-800 mb-1">Query Validation Errors:</div>
+                        <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/30">
+                          <div className="text-sm font-medium text-red-400 mb-1">Query Validation Errors:</div>
                           <ul className="list-disc ml-5 space-y-1">
                             {validationErrors.map((e, i) => (
-                              <li key={i} className="text-sm text-red-700">{e.message}</li>
+                              <li key={i} className="text-sm text-red-400">{e.message}</li>
                             ))}
                           </ul>
                         </div>
@@ -331,21 +314,21 @@ SELECT * FROM customers LIMIT 10;"
 
                       {/* Execution Summary */}
                       {currentResult && validationErrors.length === 0 && (
-                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                        <div className="px-4 py-3 bg-muted/50 border-b border-border">
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-4">
-                              <span className="text-gray-600">
-                                <span className="font-medium">{currentResult.rowCount.toLocaleString()}</span> rows returned
+                              <span className="text-muted-foreground">
+                                <span className="font-medium text-foreground">{currentResult.rowCount.toLocaleString()}</span> rows returned
                               </span>
-                              <span className="text-gray-600">
-                                Executed in <span className="font-medium">{currentResult.executionTimeMs}ms</span>
+                              <span className="text-muted-foreground">
+                                Executed in <span className="font-medium text-foreground">{currentResult.executionTimeMs}ms</span>
                               </span>
-                              <span className="text-gray-600">
-                                Status: <span className="font-medium capitalize">{currentResult.status}</span>
+                              <span className="text-muted-foreground">
+                                Status: <span className="font-medium text-foreground capitalize">{currentResult.status}</span>
                               </span>
                             </div>
                             {currentResult.runId && (
-                              <span className="text-xs text-gray-500 font-mono">
+                              <span className="text-xs text-muted-foreground font-mono">
                                 Run ID: {currentResult.runId}
                               </span>
                             )}
@@ -359,7 +342,7 @@ SELECT * FROM customers LIMIT 10;"
                           <div className={`relative h-full transition-opacity duration-700 ${showResults && resultsFadeIn ? 'opacity-100' : 'opacity-0'}`}>
                             {/* White overlay that fades out to reveal results */}
                             <div
-                              className="pointer-events-none absolute inset-0 bg-white"
+                              className="pointer-events-none absolute inset-0 bg-background"
                               style={{ opacity: whiteFadeOpacity, transition: 'opacity 700ms ease' }}
                             />
                             <ResultsTable
@@ -372,16 +355,16 @@ SELECT * FROM customers LIMIT 10;"
                         ) : (
                           <div className="h-full flex items-center justify-center">
                             {validationErrors.length > 0 ? (
-                              <div className="text-center text-red-700">
+                              <div className="text-center text-destructive">
                                 <h3 className="text-lg font-medium mb-2">Query Validation Errors</h3>
                                 <p className="text-sm">Fix the issues above and run again.</p>
                               </div>
                             ) : (
-                              <div className="text-center text-gray-500">
+                              <div className="text-center text-muted-foreground">
                                 <h3 className="text-lg font-medium mb-2">Query Results</h3>
                                 <p className="text-sm">Run a SQL query to see results here</p>
-                                <p className="text-xs mt-2 text-gray-400">
-                                  Use <kbd className="px-1 py-0.5 text-xs bg-gray-100 border rounded">Cmd+Enter</kbd> to execute
+                                <p className="text-xs mt-2 text-muted-foreground/60">
+                                  Use <kbd className="px-1 py-0.5 text-xs bg-muted border border-border rounded">Cmd+Enter</kbd> to execute
                                 </p>
                               </div>
                             )}

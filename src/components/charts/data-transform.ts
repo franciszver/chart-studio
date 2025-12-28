@@ -3,11 +3,25 @@ import type { ChartSpec } from '@/types/chart-spec';
 
 // rows: backend returns array of objects with grouped columns and measures
 export function transformRowsForRecharts(spec: ChartSpec, rows: any[]) {
+  // For scatter plots, return raw data - no transformation needed
+  // Support both x/y and xValue/yValue encodings
+  if (spec.type === 'scatter') {
+    const xValueField = spec.encodings?.x?.field || spec.encodings?.xValue?.field;
+    const yValueField = spec.encodings?.y?.field || spec.encodings?.yValue?.field;
+
+    return {
+      chartData: rows,
+      seriesKeys: [],
+      xKey: xValueField,
+      valueKey: yValueField,
+    };
+  }
+
   // For pie charts, handle category/value encodings differently
   if (spec.type === 'pie') {
     const categoryField = (spec.encodings as any).category?.field ?? spec.data.dimensions[0]?.field;
     const valueField = (spec.encodings as any).value?.field ?? spec.data.measures[0]?.field;
-    
+
     return {
       chartData: rows.map(r => ({
         [categoryField]: r[categoryField],

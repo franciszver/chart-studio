@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -18,6 +18,15 @@ const DELETE_CARD = gql`
   }
 `;
 
+const UPSERT_CARD = gql`
+  mutation UpsertCardFromRenderer($dashboardId: ID!, $cardId: ID!, $chartSpec: JSON!) {
+    upsertCard(dashboardId: $dashboardId, cardId: $cardId, chartSpec: $chartSpec) {
+      id
+      chartSpec
+    }
+  }
+`;
+
 interface DashboardCardProps {
   title: string;
   spec: ChartSpec;
@@ -28,7 +37,36 @@ interface DashboardCardProps {
 export function DashboardCard({ title, spec, cardId, dashboardId }: DashboardCardProps) {
   const subtitle = spec.options?.subtitle;
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  
+  const [currentSpec, setCurrentSpec] = useState(spec);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [upsertCard] = useMutation(UPSERT_CARD);
+
+  // Debounced spec change handler for column reordering persistence
+  const handleSpecChange = useCallback((newSpec: ChartSpec) => {
+    setCurrentSpec(newSpec);
+
+    // Clear existing debounce timer
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    // Debounce the save by 500ms
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await upsertCard({
+          variables: {
+            dashboardId,
+            cardId,
+            chartSpec: newSpec,
+          },
+        });
+      } catch (error) {
+        console.error('Failed to save column order:', error);
+      }
+    }, 500);
+  }, [dashboardId, cardId, upsertCard]);
+
   const [deleteCard, { loading: deleting }] = useMutation(DELETE_CARD, {
     update(cache) {
       // Update the cache to remove the deleted card
@@ -116,7 +154,7 @@ export function DashboardCard({ title, spec, cardId, dashboardId }: DashboardCar
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-2 flex-1 flex flex-col min-h-0">
-        <ChartRenderer spec={spec} />
+        <ChartRenderer spec={currentSpec} onSpecChange={handleSpecChange} />
       </CardContent>
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

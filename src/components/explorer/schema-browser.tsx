@@ -92,19 +92,19 @@ export function SchemaBrowser() {
 
   const getColumnIcon = (column: ColumnMetadata) => {
     if (column.isPrimaryKey) {
-      return <Key className="w-3 h-3 text-yellow-600" />
+      return <Key className="w-3 h-3 text-amber-400" />
     }
     if (column.isForeignKey) {
-      return <Link2 className="w-3 h-3 text-blue-600" />
+      return <Link2 className="w-3 h-3 text-cyan-400" />
     }
     return null
   }
 
   const getTableIcon = (tableType: string) => {
     if (tableType === 'view') {
-      return <Eye className="w-4 h-4 text-blue-600" />
+      return <Eye className="w-4 h-4 text-cyan-500" />
     }
-    return <TableIcon className="w-4 h-4 text-gray-600" />
+    return <TableIcon className="w-4 h-4 text-muted-foreground" />
   }
 
   if (loading) {
@@ -127,9 +127,9 @@ export function SchemaBrowser() {
   if (error) {
     return (
       <div className="h-full p-4 flex items-center justify-center">
-        <div className="text-center text-red-600">
+        <div className="text-center text-red-400">
           <p className="text-sm font-medium">Failed to load schema</p>
-          <p className="text-xs mt-1">{error.message}</p>
+          <p className="text-xs mt-1 text-muted-foreground">{error.message}</p>
           <Button variant="outline" size="sm" onClick={handleRefresh} className="mt-2">
             <RefreshCw className="w-3 h-3 mr-1" />
             Retry
@@ -142,9 +142,9 @@ export function SchemaBrowser() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-900">Database Schema</h2>
+          <h2 className="text-sm font-semibold text-foreground">Database Schema</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -157,7 +157,7 @@ export function SchemaBrowser() {
         
         {/* Search Input */}
         <div className="relative">
-          <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Filter tables and columns..."
             value={searchTerm}
@@ -170,7 +170,7 @@ export function SchemaBrowser() {
       {/* Schema Tree */}
       <div className="flex-1 overflow-auto p-2">
         {filteredTables.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             <p className="text-sm">No tables found</p>
             {searchTerm && (
               <p className="text-xs mt-1">Try adjusting your search term</p>
@@ -184,29 +184,29 @@ export function SchemaBrowser() {
                 open={expandedTables.has(table.name)}
                 onOpenChange={() => toggleTable(table.name)}
               >
-                <CollapsibleTrigger className="flex items-center w-full text-left p-2 rounded hover:bg-gray-100 group">
+                <CollapsibleTrigger className="flex items-center w-full text-left p-2 rounded hover:bg-muted group">
                   <div className="flex items-center flex-1 min-w-0">
                     {expandedTables.has(table.name) ? (
-                      <ChevronDown className="w-3 h-3 text-gray-400 mr-1 flex-shrink-0" />
+                      <ChevronDown className="w-3 h-3 text-muted-foreground mr-1 flex-shrink-0" />
                     ) : (
-                      <ChevronRight className="w-3 h-3 text-gray-400 mr-1 flex-shrink-0" />
+                      <ChevronRight className="w-3 h-3 text-muted-foreground mr-1 flex-shrink-0" />
                     )}
                     {getTableIcon(table.type)}
-                    <span className="text-sm font-medium text-gray-900 ml-2 truncate">
+                    <span className="text-sm font-medium text-foreground ml-2 truncate">
                       {table.name}
                     </span>
-                    <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                    <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
                       ({table.columns.length} cols)
                     </span>
                   </div>
                 </CollapsibleTrigger>
-                
+
                 <CollapsibleContent className="ml-6 mt-1">
                   <div className="space-y-1">
                     {table.columns.map((column) => (
                       <div
                         key={column.name}
-                        className="flex items-center p-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded"
+                        className="flex items-center p-1.5 text-xs text-foreground hover:bg-muted/50 rounded"
                       >
                         <div className="w-4 flex justify-center mr-2">
                           {getColumnIcon(column)}
@@ -214,7 +214,7 @@ export function SchemaBrowser() {
                         <span className="font-medium mr-2 min-w-0 flex-shrink truncate">
                           {column.name}
                         </span>
-                        <span className="text-gray-500 text-xs ml-auto flex-shrink-0">
+                        <span className="text-muted-foreground text-xs ml-auto flex-shrink-0">
                           {column.type}
                         </span>
                         {!column.nullable && (
@@ -231,14 +231,14 @@ export function SchemaBrowser() {
       </div>
 
       {/* Footer with Legend */}
-      <div className="p-3 border-t border-gray-200 bg-gray-50">
-        <div className="text-xs text-gray-600 space-y-1">
+      <div className="p-3 border-t border-border bg-muted/50">
+        <div className="text-xs text-muted-foreground space-y-1">
           <div className="flex items-center">
-            <Key className="w-3 h-3 text-yellow-600 mr-2" />
+            <Key className="w-3 h-3 text-amber-400 mr-2" />
             <span>Primary Key</span>
           </div>
           <div className="flex items-center">
-            <Link2 className="w-3 h-3 text-blue-600 mr-2" />
+            <Link2 className="w-3 h-3 text-cyan-400 mr-2" />
             <span>Foreign Key</span>
           </div>
           <div className="flex items-center">

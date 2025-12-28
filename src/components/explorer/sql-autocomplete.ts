@@ -136,37 +136,17 @@ export function createSqlCompletionSource(schema: SchemaMetadata) {
     const sqlContext = extractSqlContext(text, pos)
     const completions: Array<{ label: string; type: string; detail?: string; info?: string }> = []
     
-    // Debug logging
-    console.log('🔍 SQL Autocomplete Debug:', {
-      schema: schema ? `${schema.tables.length} tables` : 'no schema',
-      context: sqlContext,
-      text: text.slice(Math.max(0, pos - 50), pos + 20),
-      cursorPos: pos,
-      tablesInSchema: schema?.tables?.map(t => t.name) || [],
-      totalColumns: schema?.tables?.reduce((sum, t) => sum + t.columns.length, 0) || 0,
-      sampleColumns: schema?.tables?.slice(0, 2).map(t => ({
-        table: t.name,
-        columns: t.columns.map(c => c.name)
-      })) || []
-    })
-    
-    // SIMPLE TEST: If user types "SELECT " always show some columns
+    // If user types "SELECT " always show some columns
     if (text.toUpperCase().includes('SELECT') && sqlContext.currentWord.length >= 1) {
-      console.log('🧪 Adding columns because SELECT detected and user typing:', sqlContext.currentWord)
-      console.log('🔍 Available columns for matching:')
-      
       schema.tables.forEach(table => {
-        console.log(`  Table ${table.name}:`, table.columns.map(c => c.name))
         table.columns.forEach(column => {
           const matches = column.name.toLowerCase().startsWith(sqlContext.currentWord.toLowerCase())
-          console.log(`    ${column.name} starts with "${sqlContext.currentWord}"? ${matches}`)
-          
           if (matches) {
             completions.push({
               label: column.name,
               type: 'property',
               detail: `${table.name}.${column.name} (${column.type})`,
-              info: `Column from ${table.name} table - SELECT test`
+              info: `Column from ${table.name} table`
             })
           }
         })
@@ -284,9 +264,6 @@ export function createSqlCompletionSource(schema: SchemaMetadata) {
         })
       }
     }
-    
-    // Debug: Log what completions we found
-    console.log('🎯 SQL Completions Found:', completions.length, completions.map(c => c.label))
     
     if (completions.length === 0) {
       return null

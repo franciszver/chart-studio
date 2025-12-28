@@ -5,7 +5,7 @@ import ProfileDropdown from './profile-dropdown'
 
 export default function Header() {
   return (
-    <header className="border-b bg-white px-6 py-4">
+    <header className="border-b border-border bg-card px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-3">
@@ -17,7 +17,7 @@ export default function Header() {
               className="h-8 w-8 object-contain"
               priority
             />
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-semibold text-foreground">
             Leap Dashboard Studio
             </h1>
           </div>

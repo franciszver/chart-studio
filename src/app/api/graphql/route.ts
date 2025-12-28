@@ -2,6 +2,50 @@ import { ApolloServer } from '@apollo/server'
 import { startServerAndCreateNextHandler } from '@as-integrations/next'
 import { gql } from 'graphql-tag'
 
+// ============================================================
+// SECURITY: Server-side SQL validation
+// This is critical - client-side validation can be bypassed
+// ============================================================
+function validateSqlServer(sql: string): { valid: boolean; error?: string } {
+  // Remove comments for analysis
+  const sqlWithoutComments = sql
+    .split('\n')
+    .map(line => line.replace(/--.*$/, ''))
+    .join(' ')
+    .trim()
+
+  // Block dangerous keywords - SQL injection prevention
+  const dangerousKeywords = [
+    'DROP', 'DELETE', 'INSERT', 'UPDATE', 'CREATE',
+    'ALTER', 'TRUNCATE', 'GRANT', 'REVOKE', 'EXEC',
+    'EXECUTE', 'CALL', 'MERGE', 'REPLACE'
+  ]
+
+  const dangerousPattern = new RegExp(
+    `\\b(${dangerousKeywords.join('|')})\\b`, 'i'
+  )
+
+  if (dangerousPattern.test(sqlWithoutComments)) {
+    console.warn(`[SECURITY] Blocked dangerous SQL attempt: ${sql.substring(0, 100)}...`)
+    return {
+      valid: false,
+      error: 'Query contains prohibited operations. Only SELECT queries are allowed.'
+    }
+  }
+
+  // Only allow SELECT and WITH (CTEs)
+  const normalized = sqlWithoutComments.toLowerCase().trim()
+  if (normalized && !normalized.startsWith('select') && !normalized.startsWith('with')) {
+    console.warn(`[SECURITY] Blocked non-SELECT query: ${sql.substring(0, 100)}...`)
+    return {
+      valid: false,
+      error: 'Only SELECT queries are allowed.'
+    }
+  }
+
+  return { valid: true }
+}
+
 // Mock schema metadata
 const MOCK_SCHEMA_METADATA = {
   tables: [
@@ -587,11 +631,14 @@ const MOCK_CHART_DATA = {
     { id: 105, name: 'David Brown', email: 'david@future.com', phone: '555-0105', created_at: '2024-02-15' },
   ],
   deals: [
-    { id: 1, account_id: 1, title: 'Enterprise Software License', value: 50000, stage: 'Closed Won', created_at: '2024-01-20' },
-    { id: 2, account_id: 2, title: 'Cloud Migration Project', value: 75000, stage: 'Negotiation', created_at: '2024-02-01' },
-    { id: 3, account_id: 3, title: 'Consulting Services', value: 120000, stage: 'Proposal', created_at: '2024-02-15' },
-    { id: 4, account_id: 4, title: 'Development Platform', value: 25000, stage: 'Qualification', created_at: '2024-03-01' },
-    { id: 5, account_id: 5, title: 'Healthcare Analytics', value: 200000, stage: 'Prospecting', created_at: '2024-03-10' },
+    { id: 1, account_id: 1, deal_name: 'Enterprise Software License', amount: 125000, probability: 1.00, stage: 'Closed Won', close_date: '2024-01-20' },
+    { id: 2, account_id: 2, deal_name: 'Cloud Migration Project', amount: 89000, probability: 0.75, stage: 'Negotiation', close_date: '2024-02-01' },
+    { id: 3, account_id: 3, deal_name: 'Consulting Services', amount: 45000, probability: 0.60, stage: 'Proposal', close_date: '2024-02-15' },
+    { id: 4, account_id: 4, deal_name: 'Development Platform', amount: 28000, probability: 0.40, stage: 'Qualification', close_date: '2024-03-01' },
+    { id: 5, account_id: 5, deal_name: 'Healthcare Analytics', amount: 75000, probability: 0.20, stage: 'Prospecting', close_date: '2024-03-10' },
+    { id: 6, account_id: 1, deal_name: 'Q2 Expansion', amount: 95000, probability: 0.85, stage: 'Negotiation', close_date: '2024-04-15' },
+    { id: 7, account_id: 3, deal_name: 'Training Services', amount: 32000, probability: 0.50, stage: 'Proposal', close_date: '2024-04-20' },
+    { id: 8, account_id: 2, deal_name: 'Support Contract', amount: 18000, probability: 0.90, stage: 'Negotiation', close_date: '2024-05-01' },
   ],
   // Legacy data (keeping for existing dashboards)
   sales_revenue: [
@@ -766,11 +813,6 @@ const resolvers = {
       // Simulate network delay
       return new Promise(resolve => {
         setTimeout(() => {
-          console.log('🗄️ Returning schema metadata with tables:', MOCK_SCHEMA_METADATA.tables.map(t => ({
-            name: t.name,
-            columnCount: t.columns.length,
-            columns: t.columns.map(c => c.name)
-          })))
           resolve(MOCK_SCHEMA_METADATA)
         }, 100)
       })
@@ -837,7 +879,20 @@ const resolvers = {
     executeSql: async (_: any, { sql }: { sql: string }) => {
       const startTime = Date.now()
       const runId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      
+
+      // SERVER-SIDE VALIDATION - Critical security check
+      const validation = validateSqlServer(sql)
+      if (!validation.valid) {
+        return {
+          runId,
+          columns: ['error'],
+          rows: [{ error: validation.error }],
+          rowCount: 1,
+          executionTimeMs: Date.now() - startTime,
+          status: 'error'
+        }
+      }
+
       // Simulate execution delay
       await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 700))
       
@@ -1114,7 +1169,6 @@ const resolvers = {
     },
     cancelQuery: (_: any, { runId }: { runId: string }) => {
       // In a real implementation, this would cancel a running query
-      console.log(`Canceling query: ${runId}`)
       return true
     },
   },

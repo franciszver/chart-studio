@@ -42,7 +42,7 @@ export default function ProfileDropdown() {
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
             <AvatarImage src={user.imageUrl} alt={user.fullName || ''} />
-            <AvatarFallback className="bg-gray-100 text-gray-600 text-sm">
+            <AvatarFallback className="bg-muted text-muted-foreground text-sm">
               {initials}
             </AvatarFallback>
           </Avatar>

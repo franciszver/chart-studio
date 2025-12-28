@@ -169,11 +169,8 @@ export default function DashboardPage() {
             },
           },
         })
-        // eslint-disable-next-line no-console
-        console.log('[Dashboard] Layout saved')
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('[Dashboard] Failed to save layout:', error)
+      } catch {
+        // Layout save failed silently - non-critical
       }
     },
     500 // 500ms delay
@@ -277,10 +274,10 @@ export default function DashboardPage() {
             </Button>
           </Link>
           <div className="text-center py-12">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-lg font-medium text-foreground mb-2">
               Dashboard not found
             </h3>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               The dashboard you're looking for doesn't exist or has been deleted.
             </p>
           </div>
@@ -301,11 +298,11 @@ export default function DashboardPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{dashboard.name}</h1>
+              <h1 className="text-3xl font-bold text-foreground">{dashboard.name}</h1>
               {dashboard.description && (
-                <p className="mt-2 text-gray-600">{dashboard.description}</p>
+                <p className="mt-2 text-muted-foreground">{dashboard.description}</p>
               )}
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {dashboard.category} • Last modified {new Date(dashboard.lastModified).toLocaleDateString()}
               </p>
             </div>

@@ -158,9 +158,17 @@ export function removeField(spec: ChartSpec, encodingType: 'x' | 'y' | 'series' 
 }
 
 // Helper function to update chart type and reset incompatible encodings
-export function setChartType(spec: ChartSpec, type: 'bar' | 'line' | 'pie' | 'table'): ChartSpec {
-  const newSpec = { ...spec, type }
-  
+export function setChartType(spec: ChartSpec, type: 'bar' | 'line' | 'pie' | 'table' | 'scatter'): ChartSpec {
+  const newSpec = {
+    ...spec,
+    type,
+    data: {
+      ...spec.data,
+      dimensions: [...spec.data.dimensions],
+      measures: [...spec.data.measures]
+    }
+  }
+
   // Reset encodings that don't apply to the new chart type
   if (type === 'pie') {
     // Pie charts use category/value, not x/y/series
@@ -173,6 +181,23 @@ export function setChartType(spec: ChartSpec, type: 'bar' | 'line' | 'pie' | 'ta
   } else if (type === 'table') {
     // Tables don't use specific encodings
     newSpec.encodings = {}
+  } else if (type === 'scatter') {
+    // Scatter plots need numeric X and Y values
+    // Get the old X field before clearing (it's likely a string/dimension field from bar/line)
+    const oldXField = newSpec.encodings?.x?.field
+
+    // Clear X since bar/line X fields are typically strings (dimensions), not numbers
+    // Keep Y since it's always numeric, and keep series for color grouping
+    newSpec.encodings = {
+      x: undefined,
+      y: newSpec.encodings?.y || newSpec.encodings?.value,
+      series: newSpec.encodings?.series
+    }
+
+    // Remove the old X field from dimensions since it won't be used in scatter
+    if (oldXField) {
+      newSpec.data.dimensions = newSpec.data.dimensions.filter(d => d.field !== oldXField)
+    }
   } else {
     // Bar/line charts use x/y/series, not category/value
     if (newSpec.encodings?.category || newSpec.encodings?.value) {
@@ -183,6 +208,6 @@ export function setChartType(spec: ChartSpec, type: 'bar' | 'line' | 'pie' | 'ta
       }
     }
   }
-  
+
   return newSpec
 }

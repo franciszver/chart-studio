@@ -1,12 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useDebouncedCallback } from 'use-debounce'
-import { 
-  DndContext, 
-  DragEndEvent, 
-  DragOverEvent,
+import {
+  DndContext,
+  DragEndEvent,
   DragStartEvent,
   closestCenter,
   MouseSensor,
@@ -25,11 +23,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartRenderer } from '@/components/charts/renderer'
 import AppLayout from '@/components/layout/app-layout'
-import { useGetSchemaMetadataQuery, useExecuteChartQuery, useUpsertCardMutation } from '@/graphql/generated/graphql'
+import { useGetSchemaMetadataQuery, useExecuteChartQuery, useUpsertCardMutation, useGetDashboardQuery } from '@/graphql/generated/graphql'
 import { ChartSpec, ChartType } from '@/types/chart-spec'
 import { setChartType } from '@/lib/chart-spec-builder'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 
 interface Field {
   name: string
@@ -45,8 +43,85 @@ const CHART_TYPES = [
   { value: 'bar', label: 'Bar Chart' },
   { value: 'line', label: 'Line Chart' },
   { value: 'pie', label: 'Pie Chart' },
+  { value: 'scatter', label: 'Scatter Plot' },
   { value: 'table', label: 'Table' },
 ] as const
+
+// Static chart specs for demo cards (same as dashboard page)
+const STATIC_CHART_SPECS: Record<string, ChartSpec> = {
+  'revenue-chart': {
+    v: 1,
+    type: 'line',
+    data: {
+      source: 'sales_revenue',
+      dimensions: [{ field: 'month' }, { field: 'lead_source' }],
+      measures: [{ field: 'revenue', aggregate: 'sum', label: 'Revenue' }],
+    },
+    encodings: {
+      x: { field: 'month' },
+      y: { field: 'revenue', aggregate: 'sum', label: 'Revenue' },
+      series: { field: 'lead_source' },
+      smooth: true,
+    },
+    options: {
+      title: 'Revenue by Month',
+      subtitle: 'Track revenue trends across different lead sources over time to identify seasonal patterns and channel performance.',
+      legend: 'bottom',
+      height: 240,
+    },
+  },
+  'pipeline-chart': {
+    v: 1,
+    type: 'bar',
+    data: {
+      source: 'pipeline_stages',
+      dimensions: [{ field: 'stage' }],
+      measures: [{ field: 'amount', aggregate: 'sum' }],
+    },
+    encodings: {
+      x: { field: 'stage' },
+      y: { field: 'amount', aggregate: 'sum' },
+    },
+    options: {
+      title: 'Pipeline by Stage',
+      subtitle: 'Visualize deal progression through your sales pipeline to identify bottlenecks and conversion opportunities.',
+      height: 240,
+    },
+  },
+  'ar-aging-chart': {
+    v: 1,
+    type: 'pie',
+    data: {
+      source: 'ar_aging',
+      dimensions: [{ field: 'aging_bucket' }],
+      measures: [{ field: 'amount_due', aggregate: 'sum' }],
+    },
+    encodings: {
+      series: { field: 'aging_bucket' },
+      y: { field: 'amount_due', aggregate: 'sum' },
+    },
+    options: {
+      title: 'A/R by Aging',
+      subtitle: 'Monitor outstanding receivables by aging buckets to manage cash flow and identify collection priorities.',
+      legend: 'right',
+      height: 240,
+    },
+  },
+  'top-accounts-table': {
+    v: 1,
+    type: 'table',
+    data: {
+      source: 'top_accounts',
+      dimensions: [{ field: 'account_name' }],
+      measures: [{ field: 'revenue_90d', aggregate: 'sum', label: 'Revenue (90d)' }],
+    },
+    encodings: {},
+    options: {
+      title: 'Top Accounts',
+      subtitle: 'Review your highest-value customer accounts by 90-day revenue to focus retention and growth efforts.',
+    },
+  },
+}
 
 interface DroppableShelf {
   id: string
@@ -55,14 +130,6 @@ interface DroppableShelf {
   accepts: string[]
   maxItems?: number
 }
-
-const AGGREGATIONS = [
-  { value: 'count', label: 'Count' },
-  { value: 'sum', label: 'Sum' },
-  { value: 'avg', label: 'Average' },
-  { value: 'min', label: 'Minimum' },
-  { value: 'max', label: 'Maximum' },
-]
 
 export default function ChartBuilderPage() {
   const params = useParams()
@@ -73,7 +140,13 @@ export default function ChartBuilderPage() {
 
   // Schema data
   const { data: schemaData, loading: schemaLoading } = useGetSchemaMetadataQuery()
-  
+
+  // Fetch existing card data when editing
+  const { data: dashboardData, loading: dashboardLoading } = useGetDashboardQuery({
+    variables: { id: dashboardId },
+    skip: isNewCard,
+  })
+
   // Chart spec state
   const [chartSpec, setChartSpec] = useState<ChartSpec>({
     v: 1,
@@ -90,9 +163,42 @@ export default function ChartBuilderPage() {
     }
   })
 
+  // Track if we've initialized from existing card
+  const [initialized, setInitialized] = useState(false)
+
   // UI state
   const [selectedTable, setSelectedTable] = useState<string>('')
   const [draggedField, setDraggedField] = useState<Field | null>(null)
+
+  // Initialize chart spec from existing card data or static specs
+  useEffect(() => {
+    if (!isNewCard && !initialized) {
+      // First, try to find the card in the database
+      const existingCard = dashboardData?.dashboard?.cards?.find(card => card.id === cardId)
+
+      if (existingCard?.chartSpec) {
+        // Card found in database
+        const spec = existingCard.chartSpec as ChartSpec
+        setChartSpec(spec)
+        if (spec.data?.source) {
+          setSelectedTable(spec.data.source)
+        }
+        setInitialized(true)
+      } else if (STATIC_CHART_SPECS[cardId]) {
+        // Fall back to static chart spec for demo cards
+        const spec = STATIC_CHART_SPECS[cardId]
+        setChartSpec(spec)
+        if (spec.data?.source) {
+          setSelectedTable(spec.data.source)
+        }
+        setInitialized(true)
+      } else if (!dashboardLoading) {
+        // Dashboard loaded but card not found anywhere - mark as initialized anyway
+        // This allows creating a new card with the given ID
+        setInitialized(true)
+      }
+    }
+  }, [isNewCard, dashboardData, dashboardLoading, cardId, initialized])
   
   // Mutations
   const [upsertCard, { loading: saving }] = useUpsertCardMutation({
@@ -146,28 +252,6 @@ export default function ChartBuilderPage() {
     variables: { spec: chartSpec },
     skip: !chartSpec.data.source || chartSpec.data.measures.length === 0,
     fetchPolicy: 'cache-and-network',
-    onCompleted: (data) => {
-      console.log('GraphQL Query completed:', {
-        rowsCount: data?.executeChart?.rows?.length,
-        rows: data?.executeChart?.rows,
-        meta: data?.executeChart?.meta,
-        spec: chartSpec
-      })
-    },
-    onError: (error) => {
-      console.log('GraphQL Query error:', error)
-    }
-  })
-
-  // Debug the query state
-  console.log('Query state:', {
-    shouldSkip: !chartSpec.data.source || chartSpec.data.measures.length === 0,
-    hasSource: !!chartSpec.data.source,
-    measuresCount: chartSpec.data.measures.length,
-    isLoading: previewLoading,
-    hasError: !!previewError,
-    hasData: !!previewData,
-    currentSpec: chartSpec
   })
 
   // Drag and drop sensors
@@ -210,6 +294,12 @@ export default function ChartBuilderPage() {
         return [
           { id: 'columns', label: 'Columns', encoding: 'columns', accepts: ['string', 'number', 'date'], maxItems: 10 },
         ]
+      case 'scatter':
+        return [
+          { id: 'x-axis', label: 'X-Axis (Numeric)', encoding: 'x', accepts: ['number'], maxItems: 1 },
+          { id: 'y-axis', label: 'Y-Axis (Numeric)', encoding: 'y', accepts: ['number'], maxItems: 1 },
+          { id: 'series', label: 'Color By', encoding: 'series', accepts: ['string'], maxItems: 1 },
+        ]
       default: // bar, line
         return [
           { id: 'x-axis', label: 'X-Axis', encoding: 'x', accepts: ['string', 'date'], maxItems: 1 },
@@ -246,16 +336,7 @@ export default function ChartBuilderPage() {
       shelf = shelves.find(s => s.id === over.id)
     }
     
-    console.log('Drag end debug:', { 
-      activeId: active.id, 
-      overId: over.id, 
-      fieldName: field?.name,
-      shelfId: shelf?.id,
-      shelfEncoding: shelf?.encoding
-    })
-    
     if (!field || !shelf) {
-      console.log('Missing field or shelf:', { field, shelf })
       return
     }
 
@@ -268,17 +349,6 @@ export default function ChartBuilderPage() {
 
     // Update chart spec based on the shelf
     addFieldToShelf(field, shelf)
-    
-    // Log the updated chart spec
-    setTimeout(() => {
-      console.log('Updated chart spec:', {
-        source: chartSpec.data.source,
-        measuresCount: chartSpec.data.measures.length,
-        measures: chartSpec.data.measures,
-        dimensionsCount: chartSpec.data.dimensions.length,
-        encodings: chartSpec.encodings
-      })
-    }, 100)
   }
 
   // Map database types to general data types
@@ -307,10 +377,23 @@ export default function ChartBuilderPage() {
       switch (shelf.encoding) {
         case 'x':
           newSpec.encodings = { ...newSpec.encodings, x: { field: field.name } }
-          // Add to dimensions if it's a dimension field
-          if (getFieldDataType(field.type) !== 'number') {
-            if (!newSpec.data.dimensions.some(d => d.field === field.name)) {
-              newSpec.data.dimensions.push({ field: field.name })
+          // For scatter plots, X is numeric and should be added to measures
+          // For bar/line, X is typically a dimension (string/date)
+          if (newSpec.type === 'scatter') {
+            // Scatter X is numeric - add to measures if not already present
+            if (!newSpec.data.measures.some(m => m.field === field.name)) {
+              newSpec.data.measures.push({
+                field: field.name,
+                aggregate: 'sum',
+                label: field.name
+              })
+            }
+          } else {
+            // Bar/line X is a dimension
+            if (getFieldDataType(field.type) !== 'number') {
+              if (!newSpec.data.dimensions.some(d => d.field === field.name)) {
+                newSpec.data.dimensions.push({ field: field.name })
+              }
             }
           }
           break
@@ -458,15 +541,7 @@ export default function ChartBuilderPage() {
 
   // Handle chart type change while preserving fields
   const handleChartTypeChange = (newType: ChartType) => {
-    setChartSpec(prev => {
-      console.log('Changing chart type from', prev.type, 'to', newType)
-      console.log('Current encodings:', prev.encodings)
-      
-      const newSpec = setChartType(prev, newType)
-      
-      console.log('New encodings:', newSpec.encodings)
-      return newSpec
-    })
+    setChartSpec(prev => setChartType(prev, newType))
   }
 
   // Handle save
@@ -493,17 +568,42 @@ export default function ChartBuilderPage() {
     }
   }
 
+  // Show loading state when fetching existing card
+  if (!isNewCard && (dashboardLoading || !initialized)) {
+    return (
+      <AppLayout>
+        <div className="h-full flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" onClick={() => router.back()}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+              <h1 className="text-xl font-semibold text-foreground">Edit Chart</h1>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <Skeleton className="w-8 h-8 rounded-full mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading chart data...</p>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
   return (
     <AppLayout>
       <div className="h-full flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Dashboard
             </Button>
-            <h1 className="text-xl font-semibold">
+            <h1 className="text-xl font-semibold text-foreground">
               {isNewCard ? 'Create New Chart' : 'Edit Chart'}
             </h1>
           </div>
@@ -525,9 +625,9 @@ export default function ChartBuilderPage() {
         >
           <div className="flex-1 flex overflow-hidden">
             {/* Left Panel - Fields and Data Source */}
-            <div className="w-80 border-r bg-gray-50 flex flex-col">
-              <div className="p-4 border-b bg-white">
-                <h2 className="font-medium mb-3">Data Source</h2>
+            <div className="w-80 border-r border-border bg-muted/50 flex flex-col">
+              <div className="p-4 border-b border-border bg-card">
+                <h2 className="font-medium mb-3 text-foreground">Data Source</h2>
                 <Select value={selectedTable} onValueChange={setSelectedTable}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a table" />
@@ -548,11 +648,11 @@ export default function ChartBuilderPage() {
 
               <div className="flex-1 overflow-y-auto">
                 <div className="p-4">
-                  <h3 className="font-medium mb-3">Available Fields</h3>
+                  <h3 className="font-medium mb-3 text-foreground">Available Fields</h3>
                   {!selectedTable ? (
-                    <p className="text-sm text-gray-500">Select a table to see fields</p>
+                    <p className="text-sm text-muted-foreground">Select a table to see fields</p>
                   ) : availableFields.length === 0 ? (
-                    <p className="text-sm text-gray-500">No fields found</p>
+                    <p className="text-sm text-muted-foreground">No fields found</p>
                   ) : (
                     <div className="space-y-2">
                       {availableFields.map(field => (
@@ -567,7 +667,7 @@ export default function ChartBuilderPage() {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col">
               {/* Chart Configuration */}
-              <div className="p-4 border-b bg-white">
+              <div className="p-4 border-b border-border bg-card">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex-1">
                     <Label htmlFor="chart-title">Chart Title</Label>
@@ -630,65 +730,33 @@ export default function ChartBuilderPage() {
                     <CardTitle>Preview</CardTitle>
                   </CardHeader>
                   <CardContent className="h-full">
-                    {(() => {
-                      console.log('Preview render conditions:', {
-                        hasSource: !!chartSpec.data.source,
-                        measuresCount: chartSpec.data.measures.length,
-                        isLoading: previewLoading,
-                        hasError: !!previewError,
-                        hasData: !!previewData,
-                        dataRowsCount: previewData?.executeChart?.rows?.length || 0
-                      })
-                      
-                      if (!chartSpec.data.source) {
-                        console.log('Preview: No data source')
-                        return (
-                          <div className="h-full flex items-center justify-center text-gray-500">
-                            Select a data source and add fields to see preview
-                          </div>
-                        )
-                      }
-                      
-                      if (chartSpec.data.measures.length === 0) {
-                        console.log('Preview: No measures')
-                        return (
-                          <div className="h-full flex items-center justify-center text-gray-500">
-                            Add at least one measure to see preview
-                          </div>
-                        )
-                      }
-                      
-                      if (previewLoading) {
-                        console.log('Preview: Loading')
-                        return (
-                          <div className="h-full flex items-center justify-center">
-                            <Skeleton className="w-full h-64" />
-                          </div>
-                        )
-                      }
-                      
-                      if (previewError) {
-                        console.log('Preview: Error', previewError)
-                        return (
-                          <div className="h-full flex items-center justify-center text-red-500">
-                            Error loading preview: {previewError.message}
-                          </div>
-                        )
-                      }
-                      
-                      console.log('Preview: Rendering chart with data:', previewData?.executeChart?.rows)
-                      return (
-                        <ChartRenderer
-                          spec={{
-                            ...chartSpec,
-                            data: {
-                              ...chartSpec.data,
-                              rows: previewData?.executeChart?.rows || []
-                            }
-                          }}
-                        />
-                      )
-                    })()}
+                    {!chartSpec.data.source ? (
+                      <div className="h-full flex items-center justify-center text-muted-foreground">
+                        Select a data source and add fields to see preview
+                      </div>
+                    ) : chartSpec.data.measures.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-muted-foreground">
+                        Add at least one measure to see preview
+                      </div>
+                    ) : previewLoading ? (
+                      <div className="h-full flex items-center justify-center">
+                        <Skeleton className="w-full h-64" />
+                      </div>
+                    ) : previewError ? (
+                      <div className="h-full flex items-center justify-center text-red-400">
+                        Error loading preview: {previewError.message}
+                      </div>
+                    ) : (
+                      <ChartRenderer
+                        spec={{
+                          ...chartSpec,
+                          data: {
+                            ...chartSpec.data,
+                            rows: previewData?.executeChart?.rows || []
+                          }
+                        }}
+                      />
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -698,9 +766,9 @@ export default function ChartBuilderPage() {
           {/* Drag Overlay */}
           <DragOverlay>
             {draggedField ? (
-              <div className="bg-blue-100 border border-blue-300 rounded px-3 py-2 shadow-lg">
-                <div className="font-medium">{draggedField.name}</div>
-                <div className="text-xs text-gray-600">{draggedField.type}</div>
+              <div className="bg-primary/20 border border-primary rounded px-3 py-2 shadow-lg">
+                <div className="font-medium text-foreground">{draggedField.name}</div>
+                <div className="text-xs text-muted-foreground">{draggedField.type}</div>
               </div>
             ) : null}
           </DragOverlay>
@@ -733,21 +801,21 @@ function FieldItem({ field }: { field: Field }) {
       style={style}
       {...listeners}
       {...attributes}
-      className={`bg-white border rounded-lg p-3 cursor-grab hover:shadow-sm transition-shadow ${
+      className={`bg-card border border-border rounded-lg p-3 cursor-grab hover:shadow-sm transition-shadow ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate">{field.name}</div>
-          <div className="text-xs text-gray-500">{field.type}</div>
+          <div className="font-medium text-sm truncate text-foreground">{field.name}</div>
+          <div className="text-xs text-muted-foreground">{field.type}</div>
         </div>
         <div className="flex items-center gap-1 ml-2">
           {field.isPrimaryKey && (
-            <span className="bg-yellow-100 text-yellow-800 text-xs px-1 rounded">PK</span>
+            <span className="bg-amber-500/20 text-amber-400 text-xs px-1 rounded">PK</span>
           )}
           {field.isForeignKey && (
-            <span className="bg-blue-100 text-blue-800 text-xs px-1 rounded">FK</span>
+            <span className="bg-cyan-500/20 text-cyan-400 text-xs px-1 rounded">FK</span>
           )}
         </div>
       </div>
@@ -771,31 +839,31 @@ function MultiFieldDropShelf({
   })
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
       className={`border-2 border-dashed rounded-lg p-4 min-h-32 transition-colors ${
-        isOver 
-          ? 'border-blue-400 bg-blue-50'
-          : 'border-gray-300 bg-gray-50'
+        isOver
+          ? 'border-primary bg-primary/10'
+          : 'border-border bg-muted/50'
       }`}
     >
-      <div className="text-sm font-medium text-gray-700 mb-3">{shelf.label}</div>
-      
+      <div className="text-sm font-medium text-foreground mb-3">{shelf.label}</div>
+
       {fields.length > 0 ? (
         <div className="grid grid-cols-2 gap-2">
           {fields.map(field => (
-            <div 
+            <div
               key={field.name}
-              className="bg-blue-100 border border-blue-300 rounded px-2 py-1 flex items-center justify-between text-xs"
+              className="bg-primary/20 border border-primary/50 rounded px-2 py-1 flex items-center justify-between text-xs"
             >
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{field.name}</div>
-                <div className="text-gray-600 truncate">{field.type}</div>
+                <div className="font-medium truncate text-foreground">{field.name}</div>
+                <div className="text-muted-foreground truncate">{field.type}</div>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-4 w-4 p-0 ml-1 hover:bg-red-100"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0 ml-1 hover:bg-destructive/20"
                 onClick={() => onRemoveField(field)}
               >
                 <X className="w-3 h-3" />
@@ -804,10 +872,10 @@ function MultiFieldDropShelf({
           ))}
         </div>
       ) : (
-        <div className="text-xs text-gray-500 text-center py-4">
+        <div className="text-xs text-muted-foreground text-center py-4">
           Drop {shelf.accepts.join('/')} fields here
           <br />
-          <span className="text-gray-400">Multiple fields supported</span>
+          <span className="text-muted-foreground/70">Multiple fields supported</span>
         </div>
       )}
     </div>
@@ -815,11 +883,11 @@ function MultiFieldDropShelf({
 }
 
 // Drop Shelf Component
-function DropShelf({ 
-  shelf, 
-  fieldName, 
-  onRemove 
-}: { 
+function DropShelf({
+  shelf,
+  fieldName,
+  onRemove
+}: {
   shelf: DroppableShelf
   fieldName: string | null
   onRemove: () => void
@@ -830,24 +898,24 @@ function DropShelf({
   })
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
       className={`border-2 border-dashed rounded-lg p-4 min-h-20 transition-colors ${
-        isOver 
-          ? 'border-blue-400 bg-blue-50' 
-          : 'border-gray-300 bg-gray-50'
+        isOver
+          ? 'border-primary bg-primary/10'
+          : 'border-border bg-muted/50'
       }`}
     >
-      <div className="text-sm font-medium text-gray-700 mb-2">{shelf.label}</div>
+      <div className="text-sm font-medium text-foreground mb-2">{shelf.label}</div>
       {fieldName ? (
-        <div className="bg-blue-100 border border-blue-300 rounded px-2 py-1 flex items-center justify-between">
-          <span className="text-sm font-medium">{fieldName}</span>
+        <div className="bg-primary/20 border border-primary/50 rounded px-2 py-1 flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">{fieldName}</span>
           <Button variant="ghost" size="sm" onClick={onRemove}>
             <X className="w-3 h-3" />
           </Button>
         </div>
       ) : (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-muted-foreground">
           Drop {shelf.accepts.join('/')} field here
         </div>
       )}

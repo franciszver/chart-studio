@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs';
 import { ApolloProviderWrapper } from '@/components/providers/apollo-provider';
+import { LoadingProvider } from '@/components/providers/loading-provider';
 import DevOverlayHider from '@/components/common/dev-overlay-hider';
 import "./globals.css";
 
@@ -44,8 +45,10 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           <ApolloProviderWrapper>
-            <DevOverlayHider />
-            {children}
+            <LoadingProvider>
+              <DevOverlayHider />
+              {children}
+            </LoadingProvider>
           </ApolloProviderWrapper>
         </body>
       </html>

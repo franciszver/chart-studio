@@ -14,7 +14,7 @@ interface ToolbarProps {
 export function Toolbar({ onRun, onCancel, onExport, isRunning, hasResults }: ToolbarProps) {
 
   return (
-    <div className="flex items-center gap-2 p-4 bg-white border-b border-gray-200">
+    <div className="flex items-center gap-2 p-4 bg-card border-b border-border">
       <Button
         onClick={onRun}
         className="flex items-center gap-2"
@@ -51,8 +51,8 @@ export function Toolbar({ onRun, onCancel, onExport, isRunning, hasResults }: To
         Export
       </Button>
 
-      <div className="ml-auto text-sm text-gray-500">
-        <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded">
+      <div className="ml-auto text-sm text-muted-foreground">
+        <kbd className="px-2 py-1 text-xs font-semibold text-foreground bg-muted border border-border rounded">
           Cmd+Enter
         </kbd>
         <span className="ml-1">to run</span>

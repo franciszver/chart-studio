@@ -2,13 +2,26 @@
 
 import React, { useCallback, useMemo, useRef } from 'react'
 import { AgGridReact } from 'ag-grid-react'
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
+import { ModuleRegistry, AllCommunityModule, themeQuartz } from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-alpine.css'
 import { ColDef, GridApi } from 'ag-grid-community'
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule])
+
+// Create dark theme for AG Grid
+const darkTheme = themeQuartz.withParams({
+  backgroundColor: '#0a0a0b',
+  foregroundColor: '#fafafa',
+  headerBackgroundColor: '#131316',
+  headerTextColor: '#fafafa',
+  oddRowBackgroundColor: '#131316',
+  rowHoverColor: '#1c1c1f',
+  borderColor: '#27272a',
+  accentColor: '#8b5cf6',
+  selectedRowBackgroundColor: '#8b5cf620',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+})
 
 interface ResultsTableProps {
   columns: string[]
@@ -79,9 +92,9 @@ export const ResultsTable = React.forwardRef<ResultsTableRef, ResultsTableProps>
 
   if (loading) {
     return (
-      <div className="ag-theme-alpine h-full">
+      <div className="h-full bg-background">
         <div className="flex items-center justify-center h-full">
-          <div className="text-gray-500">Loading results...</div>
+          <div className="text-muted-foreground">Loading results...</div>
         </div>
       </div>
     )
@@ -89,22 +102,22 @@ export const ResultsTable = React.forwardRef<ResultsTableRef, ResultsTableProps>
 
   if (columns.length === 0 || rows.length === 0) {
     return (
-      <div className="ag-theme-alpine h-full">
+      <div className="h-full bg-background">
         <div className="flex items-center justify-center h-full">
-          <div className="text-gray-500">No results to display</div>
+          <div className="text-muted-foreground">No results to display</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="ag-theme-alpine h-full">
+    <div className="h-full">
       <AgGridReact
         ref={gridRef}
         columnDefs={columnDefs}
         rowData={rows}
         defaultColDef={defaultColDef}
-        theme="legacy"
+        theme={darkTheme}
         animateRows={true}
         rowSelection="multiple"
         enableBrowserTooltips={true}

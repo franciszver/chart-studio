@@ -1,5 +1,5 @@
 // src/types/chart-spec.ts
-export type ChartType = 'bar' | 'line' | 'pie' | 'table';
+export type ChartType = 'bar' | 'line' | 'pie' | 'table' | 'scatter';
 
 export type TimeUnit = 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'none';
 
@@ -45,6 +45,10 @@ export interface Encodings {
   label?: boolean;              // show data labels
   stack?: boolean;              // bar/area stacking
   smooth?: boolean;             // line smoothing
+  // Scatter plot specific encodings
+  xValue?: MeasureRef;          // numeric X axis for scatter
+  yValue?: MeasureRef;          // numeric Y axis for scatter
+  size?: MeasureRef;            // bubble size (optional)
 }
 
 export interface ChartOptions {
@@ -56,6 +60,7 @@ export interface ChartOptions {
   tooltipFields?: FieldRef[];   // extra fields to show in tooltip
   height?: number;              // px; width is responsive container
   sampleTopNSeries?: number;    // limit series cardinality
+  columnOrder?: string[];       // table column display order (persisted)
 }
 
 export interface ChartSpec {
