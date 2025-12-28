@@ -15,6 +15,21 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { gql } from '@apollo/client'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
 
 const GET_DASHBOARDS = gql`
   query GetDashboards {
@@ -25,10 +40,20 @@ const GET_DASHBOARDS = gql`
       category
       lastModified
       createdAt
+      order
       cards {
         id
         chartSpec
       }
+    }
+  }
+`
+
+const UPDATE_DASHBOARDS_ORDER = gql`
+  mutation UpdateDashboardsOrder($order: [DashboardOrderInput!]!) {
+    updateDashboardsOrder(order: $order) {
+      id
+      order
     }
   }
 `
@@ -77,8 +102,24 @@ const categories = [
 export default function DashboardsPage() {
   const [selectedCategory, setSelectedCategory] = useState('All Categories')
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [localDashboards, setLocalDashboards] = useState<any[]>([])
 
-  const { data, loading, refetch } = useQuery(GET_DASHBOARDS)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const { data, loading, refetch } = useQuery(GET_DASHBOARDS, {
+    onCompleted: (data) => {
+      setLocalDashboards(data?.dashboards || [])
+    },
+  })
   const [createDashboard, { loading: createLoading }] = useMutation(CREATE_DASHBOARD, {
     onCompleted: () => {
       refetch()
@@ -91,11 +132,34 @@ export default function DashboardsPage() {
   const [deleteDashboard] = useMutation(DELETE_DASHBOARD, {
     onCompleted: () => refetch(),
   })
+  const [updateDashboardsOrder] = useMutation(UPDATE_DASHBOARDS_ORDER)
 
-  const dashboards = data?.dashboards || []
-  const filteredDashboards = selectedCategory === 'All Categories' 
-    ? dashboards 
+  const dashboards = localDashboards.length > 0 ? localDashboards : (data?.dashboards || [])
+  const filteredDashboards = selectedCategory === 'All Categories'
+    ? dashboards
     : dashboards.filter((dashboard: any) => dashboard.category === selectedCategory)
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = dashboards.findIndex((d: any) => d.id === active.id)
+      const newIndex = dashboards.findIndex((d: any) => d.id === over.id)
+
+      const reorderedDashboards = arrayMove(dashboards, oldIndex, newIndex)
+      setLocalDashboards(reorderedDashboards)
+
+      // Persist the new order
+      const orderUpdates = reorderedDashboards.map((dashboard: any, index: number) => ({
+        id: dashboard.id,
+        order: index,
+      }))
+
+      updateDashboardsOrder({
+        variables: { order: orderUpdates },
+      })
+    }
+  }
 
   const handleCreateDashboard = (formData: any) => {
     createDashboard({
@@ -180,17 +244,29 @@ export default function DashboardsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDashboards.map((dashboard: any) => (
-            <DashboardCard
-              key={dashboard.id}
-              dashboard={dashboard}
-              onEdit={handleEdit}
-              onDuplicate={handleDuplicate}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredDashboards.map((d: any) => d.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredDashboards.map((dashboard: any) => (
+                <DashboardCard
+                  key={dashboard.id}
+                  dashboard={dashboard}
+                  onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
+                  onDelete={handleDelete}
+                  isDraggable={selectedCategory === 'All Categories'}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         {filteredDashboards.length === 0 && (
           <div className="text-center py-12">

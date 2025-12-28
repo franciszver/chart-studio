@@ -84,7 +84,7 @@ const MOCK_SCHEMA_METADATA = {
 }
 
 // Mock data
-const dashboards = [
+const dashboards: any[] = [
   {
     id: '1',
     name: 'Sales Performance',
@@ -92,6 +92,7 @@ const dashboards = [
     category: 'Sales & Performance',
     lastModified: '2024-01-15T10:30:00Z',
     createdAt: '2024-01-10T09:00:00Z',
+    order: 0,
     layout: [
       { i: 'revenue-chart', x: 0, y: 0, w: 6, h: 4 },
       { i: 'pipeline-chart', x: 6, y: 0, w: 6, h: 4 },
@@ -192,6 +193,7 @@ const dashboards = [
     category: 'Sales & Performance',
     lastModified: '2024-01-14T14:20:00Z',
     createdAt: '2024-01-08T11:15:00Z',
+    order: 1,
     layout: [
       { i: 'company-revenue-chart', x: 0, y: 0, w: 6, h: 4 },
       { i: 'office-performance-chart', x: 6, y: 0, w: 6, h: 4 },
@@ -294,6 +296,7 @@ const dashboards = [
     category: 'Financial',
     lastModified: '2024-01-13T16:45:00Z',
     createdAt: '2024-01-05T13:30:00Z',
+    order: 2,
     layout: [
       { i: 'ar-aging-chart', x: 0, y: 0, w: 6, h: 4 },
       { i: 'overdue-accounts-chart', x: 6, y: 0, w: 6, h: 4 },
@@ -396,6 +399,7 @@ const dashboards = [
     category: 'Financial',
     lastModified: '2024-01-12T09:15:00Z',
     createdAt: '2024-01-03T15:20:00Z',
+    order: 3,
     layout: [
       { i: 'commission-table', x: 0, y: 0, w: 6, h: 4 },
       { i: 'commission-trend-chart', x: 6, y: 0, w: 6, h: 4 },
@@ -498,6 +502,7 @@ const dashboards = [
     category: 'Operations',
     lastModified: '2024-01-11T12:30:00Z',
     createdAt: '2024-01-02T10:45:00Z',
+    order: 4,
     layout: [
       { i: 'work-orders-bar', x: 0, y: 0, w: 12, h: 4 },
     ],
@@ -531,6 +536,7 @@ const dashboards = [
     category: 'Administrative',
     lastModified: '2024-01-10T08:20:00Z',
     createdAt: '2023-12-28T14:10:00Z',
+    order: 5,
     layout: [
       { i: 'user-activity-table', x: 0, y: 0, w: 12, h: 4 },
     ],
@@ -560,6 +566,7 @@ const dashboards = [
     category: 'Custom',
     lastModified: '2024-01-15T10:00:00Z',
     createdAt: '2024-01-15T10:00:00Z',
+    order: 6,
     layout: [],
     cards: [],
   },
@@ -661,6 +668,7 @@ const typeDefs = gql`
     createdAt: String!
     layout: JSON
     cards: [Card!]
+    order: Int!
   }
 
   type ChartExecutionMeta {
@@ -705,6 +713,11 @@ const typeDefs = gql`
     category: String
   }
 
+  input DashboardOrderInput {
+    id: ID!
+    order: Int!
+  }
+
   type Query {
     dashboards: [Dashboard!]!
     dashboard(id: ID!): Dashboard
@@ -725,6 +738,7 @@ const typeDefs = gql`
     createDashboard(input: CreateDashboardInput!): Dashboard!
     updateDashboard(id: ID!, input: UpdateDashboardInput!): Dashboard!
     updateDashboardLayout(id: ID!, layout: JSON!): Dashboard!
+    updateDashboardsOrder(order: [DashboardOrderInput!]!): [Dashboard!]!
     duplicateDashboard(id: ID!): Dashboard!
     deleteDashboard(id: ID!): Boolean!
     upsertCard(dashboardId: ID!, cardId: ID, chartSpec: JSON!): Card!
@@ -741,7 +755,7 @@ const resolvers = {
     __parseLiteral: (ast: any) => ast.value,
   },
   Query: {
-    dashboards: () => dashboards,
+    dashboards: () => [...dashboards].sort((a, b) => a.order - b.order),
     dashboard: (_: any, { id }: { id: string }) => 
       dashboards.find(dashboard => dashboard.id === id),
     executeChart: (_: any, { spec }: { spec: any }) => {
@@ -778,6 +792,7 @@ const resolvers = {
   },
   Mutation: {
     createDashboard: (_: any, { input }: { input: any }) => {
+      const maxOrder = dashboards.length > 0 ? Math.max(...dashboards.map(d => d.order)) : -1
       const newDashboard = {
         id: String(dashboards.length + 1),
         name: input.name,
@@ -785,6 +800,9 @@ const resolvers = {
         category: input.category,
         lastModified: new Date().toISOString(),
         createdAt: new Date().toISOString(),
+        order: maxOrder + 1,
+        layout: [],
+        cards: [],
       }
       dashboards.push(newDashboard)
       return newDashboard
@@ -804,7 +822,7 @@ const resolvers = {
     updateDashboardLayout: (_: any, { id, layout }: { id: string; layout: any }) => {
       const dashboardIndex = dashboards.findIndex(d => d.id === id)
       if (dashboardIndex === -1) throw new Error('Dashboard not found')
-      
+
       const updatedDashboard = {
         ...dashboards[dashboardIndex],
         layout,
@@ -813,16 +831,33 @@ const resolvers = {
       dashboards[dashboardIndex] = updatedDashboard
       return updatedDashboard
     },
+    updateDashboardsOrder: (_: any, { order }: { order: Array<{ id: string; order: number }> }) => {
+      const updatedDashboards: any[] = []
+      for (const item of order) {
+        const dashboardIndex = dashboards.findIndex(d => d.id === item.id)
+        if (dashboardIndex !== -1) {
+          dashboards[dashboardIndex] = {
+            ...dashboards[dashboardIndex],
+            order: item.order,
+            lastModified: new Date().toISOString(),
+          }
+          updatedDashboards.push(dashboards[dashboardIndex])
+        }
+      }
+      return updatedDashboards
+    },
     duplicateDashboard: (_: any, { id }: { id: string }) => {
       const originalDashboard = dashboards.find(d => d.id === id)
       if (!originalDashboard) throw new Error('Dashboard not found')
-      
+
+      const maxOrder = dashboards.length > 0 ? Math.max(...dashboards.map(d => d.order)) : -1
       const duplicatedDashboard = {
         ...originalDashboard,
         id: String(dashboards.length + 1),
         name: `${originalDashboard.name} (Copy)`,
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
+        order: maxOrder + 1,
       }
       dashboards.push(duplicatedDashboard)
       return duplicatedDashboard

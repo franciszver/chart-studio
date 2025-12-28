@@ -8,8 +8,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { DotsThree, Eye, Copy, PencilSimple, Trash, ChartBar, ChartPie, ChartLineUp, Table } from 'phosphor-react'
+import { DotsThree, Eye, Copy, PencilSimple, Trash, ChartBar, ChartPie, ChartLineUp, Table, DotsSixVertical } from 'phosphor-react'
 import Link from 'next/link'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface Dashboard {
   id: string
@@ -25,6 +27,7 @@ interface DashboardCardProps {
   onEdit: (dashboard: Dashboard) => void
   onDuplicate: (dashboard: Dashboard) => void
   onDelete: (dashboard: Dashboard) => void
+  isDraggable?: boolean
 }
 
 const getChartTypeIcon = (chartType: string) => {
@@ -57,7 +60,23 @@ export function DashboardCard({
   onEdit,
   onDuplicate,
   onDelete,
+  isDraggable = false,
 }: DashboardCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: dashboard.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -67,21 +86,32 @@ export function DashboardCard({
   }
 
   return (
-    <Link href={`/dashboards/${dashboard.id}`} className="block">
-      <Card className="group hover:shadow-md transition-shadow cursor-pointer h-full gap-0">
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <CardTitle className="text-lg line-clamp-1">{dashboard.name}</CardTitle>
-              <div className="flex items-center gap-2 mt-2">
-                {getAllChartTypes(dashboard).map((chartType, index) => (
-                  <div key={index}>
-                    {getChartTypeIcon(chartType)}
-                  </div>
-                ))}
+    <div ref={setNodeRef} style={style}>
+      <Link href={`/dashboards/${dashboard.id}`} className="block">
+        <Card className="group hover:shadow-md transition-shadow cursor-pointer h-full gap-0">
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between">
+              {isDraggable && (
+                <div
+                  {...attributes}
+                  {...listeners}
+                  className="cursor-grab active:cursor-grabbing p-1 -ml-1 mr-2 text-gray-400 hover:text-gray-600"
+                  onClick={(e) => e.preventDefault()}
+                >
+                  <DotsSixVertical size={20} />
+                </div>
+              )}
+              <div className="flex-1">
+                <CardTitle className="text-lg line-clamp-1">{dashboard.name}</CardTitle>
+                <div className="flex items-center gap-2 mt-2">
+                  {getAllChartTypes(dashboard).map((chartType, index) => (
+                    <div key={index}>
+                      {getChartTypeIcon(chartType)}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <DropdownMenu>
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -136,8 +166,9 @@ export function DashboardCard({
             {/* <p className="text-xs text-gray-600">
               Modified {formatDate(dashboard.lastModified)}
             </p> */}
-        </CardContent>
-      </Card>
-    </Link>
+          </CardContent>
+        </Card>
+      </Link>
+    </div>
   )
 }
