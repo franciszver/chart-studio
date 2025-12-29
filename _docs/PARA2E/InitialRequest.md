@@ -1,5 +1,5 @@
--Make it possible to reorder the reporting dashboards at /dashboards and persist that ordering on page refresh
--Put your own spin on the frontend styling and show us your sense of aesthetics and taste
+- Make it possible to reorder the reporting dashboards at /dashboards and persist that ordering on page refresh
+- Put your own spin on the frontend styling and show us your sense of aesthetics and taste
 - Implement line-wrapping in the SQL query viewer that can be turned on and off by pressing Option+Z or Alt+Z (the same key command as Vscode/Cursor for line wrapping)
 - Make the table charts sortable in asc/desc order
 - Make it possible to drag and reorder columns on the table charts and then persist that setting to the database
